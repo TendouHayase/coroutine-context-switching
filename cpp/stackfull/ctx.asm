@@ -1,11 +1,22 @@
 .code
 
-; uint64_t asm_add(uint64_t lhs, uint64_t rhs);
+; void context_switching(void* dst_rsp);
 
-asm_add PROC
-    mov rax, rcx ; 1번째 인자
-    add rax, rdx ; 2번째 인자
+context_switching PROC
+    push rbp
+    push rbx
+    push rsi
+    push rdi
+    push r15
+    push r14
+    push r13
+    push r12
+    sub rsp, 160  ; XMM6-XMM15
+
+    mov rax, rsp
+    mov rsp, rcx
+ 
     ret 
-asm_add ENDP
+context_switching ENDP
 
 END

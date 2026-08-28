@@ -1,11 +1,22 @@
 #if defined(_MSC_VER)
 
-#include <cstdint>
 #include <cstdio>
 
-extern "C" uint64_t asm_add(uint64_t lhs, uint64_t b);
+#include "coroutine.cpp"
 
-int main(void) { std::printf("%llu\n", asm_add(15, 15)); }
+void print(const char* str)
+{
+    std::printf("%s", str);
+    co_wait();
+}
+
+void help() { print("success"); }
+
+int main(void)
+{
+    Coroutine c(help);
+    c.co_resume();
+}
 
 #elif defined(__GNUC__)
 #elif defined(__clang__)
