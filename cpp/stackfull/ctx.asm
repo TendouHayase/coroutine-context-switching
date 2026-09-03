@@ -13,6 +13,8 @@ context_switching PROC
     push r15
 
     mov rax, rsp
+    mov r10, gs:[08h]
+    mov [r10-38h], rax
     mov rsp, rcx
     
     pop r15
@@ -30,9 +32,9 @@ context_switching ENDP
 ; void* make_trap_frame(void* stack_top, void (*entry)(void*));
 
 make_trap_frame PROC
+    mov r10, rsp
     mov rsp, rcx
     push rdx
-    mov r10, rsp
     mov r11, 0CCCCCCCCCCCCCCCCh
     push r11                     
     push r11

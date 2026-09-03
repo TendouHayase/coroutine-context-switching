@@ -7,12 +7,6 @@
 extern "C" void* context_switching(void* dst_rsp);
 extern "C" void* make_trap_frame(void* stack_top, void (*entry)());
 
-struct FatPointer
-{
-    void (*fn)(void*);
-    void* data;
-};
-
 struct alignas(16) CoroutineFrame
 {
     void* stack_base;            // 0x00
@@ -56,8 +50,8 @@ class Coroutine
             STACK_SIZE,
             nullptr,
             nullptr,
-            (void*)lo,
             (void*)hi,
+            (void*)lo,
             false,
             nullptr,
             nullptr,
@@ -106,7 +100,7 @@ class Coroutine
         __writegsqword(0x10, (std::uintptr_t)coroutine_statk_base_);
         coroutine_rsp_ = context_switching(coroutine_rsp_);
 
-        return !((CoroutineFrame*)(__readgsqword(0x10) -
+        return !((CoroutineFrame*)(__readgsqword(0x08) -
                                    sizeof(CoroutineFrame)))
                     ->finished;
     }
@@ -115,7 +109,7 @@ class Coroutine
     static void entry()
     {
         auto* frame =
-            (CoroutineFrame*)(__readgsqword(0x10) - sizeof(CoroutineFrame));
+            (CoroutineFrame*)(__readgsqword(0x08) - sizeof(CoroutineFrame));
         frame->invoke(frame->closure_ptr);
         frame->finished = true;
         context_switching(frame->caller_rsp);
@@ -132,6 +126,8 @@ void co_wait()
 {
 
     CoroutineFrame* self =
-        (CoroutineFrame*)__readgsqword(0x08) - sizeof(CoroutineFrame);
+        (CoroutineFrame*)(__readgsqword(0x08) - sizeof(CoroutineFrame));
+    __writegsqword(0x08, (std::uintptr_t)self->saved_stack_base);
+    __writegsqword(0x10, (std::uintptr_t)self->saved_stack_limit);
     self->caller_rsp = context_switching(self->caller_rsp);
 }

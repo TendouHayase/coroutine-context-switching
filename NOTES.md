@@ -16,5 +16,9 @@
     - 정확히 r11-2fh까지만 할당받은 페이지
     - 추가적으로 rsp도 할당받지 않은 페이지, rsp = r11 - 88h임
     - 단순 스택 오버플로우였음. 스택 크기 늘리니 해결
-3. 
+3. 할당받은 페이지 외부를 접근해서 계속 Access violation - code c0000005 발생
+   - 아예 다시 설계하여 코루틴 측 StackBase에 CoroutineFrame이란 구조체 배치하기로 결정
+   - CoroutineFrame에는 자신의 베이스 주소, 스택 크기, 코루틴의 rsp, 코루틴 호출자의 rsp, 호출자 측 TEB의 StackBase, StackLimit, 종료 여부, 생성자, 소멸자, 클로저 주소 저장
+   - C++ 코드에서 TEB 갱신
+   - 첫 진입때 switching_context를 그대로 쓰기위해 코루틴 객체 생성할때 코루틴 스택에 트랩 프레임 생성
 
