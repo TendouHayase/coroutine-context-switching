@@ -14,13 +14,7 @@ context_switching PROC
 
     mov rax, rsp
     mov rsp, rcx
-
-    mov QWORD PTR gs:[08h], rcx
-    mov r15, rcx
-    sub r15d, DWORD PTR [rcx+8h]
-    mov QWORD PTR gs:[10h], r15
     
-
     pop r15
     pop r14
     pop r13
@@ -33,22 +27,24 @@ context_switching PROC
     ret 
 context_switching ENDP
 
-; void* make_trap_frame(void* stack_top);
+; void* make_trap_frame(void* stack_top, void (*entry)(void*));
 
 make_trap_frame PROC
-    mov rdx, rsp
     mov rsp, rcx
-    mov rax, 0CCCCCCCCCCCCCCCCh
-    push rax                     
-    push rax
-    push rax
-    push rax
-    push rax
-    push rax
-    push rax
-    push rax
+    push rdx
+    mov r10, rsp
+    mov r11, 0CCCCCCCCCCCCCCCCh
+    push r11                     
+    push r11
+    push r11
+    push r11
+    push r11
+    push r11
+    push r11
+    push r11
 
-    mov rsp, rdx
+    mov rax, rsp
+    mov rsp, r10
 
     ret
 make_trap_frame ENDP

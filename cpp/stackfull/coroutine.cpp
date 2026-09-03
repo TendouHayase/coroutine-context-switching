@@ -5,7 +5,7 @@
 #include <memory>
 
 extern "C" void* context_switching(void* dst_rsp);
-extern "C" void* make_trap_frame(void* stack_top, void (*entry)(void*));
+extern "C" void* make_trap_frame(void* stack_top, void (*entry)());
 
 struct FatPointer
 {
@@ -38,32 +38,33 @@ class Coroutine
 {
   public:
     static constexpr std::uintptr_t STACK_SIZE = 1 << 20;
+
     template <typename F> Coroutine(F&& f)
     {
         using ClosureT = std::decay_t<F>;
         coroutine_statk_base_ = VirtualAlloc(
             NULL, STACK_SIZE, MEM_COMMIT | MEM_RESERVE, PAGE_READWRITE);
 
-        coroutine_rsp_ = frame_ =
-            (CoroutineFrame*)((std::uintptr_t)coroutine_statk_base_ +
-                              STACK_SIZE - sizeof(CoroutineFrame));
+        frame_ = (CoroutineFrame*)((std::uintptr_t)coroutine_statk_base_ +
+                                   STACK_SIZE - sizeof(CoroutineFrame));
         size_t lo, hi;
 
         GetCurrentThreadStackLimits(&lo, &hi);
 
-        *(CoroutineFrame*)(coroutine_rsp_) =
-            CoroutineFrame{coroutine_statk_base_,
-                           STACK_SIZE,
-                           nullptr,
-                           nullptr,
-                           (void*)lo,
-                           (void*)hi,
-                           false,
-                           nullptr,
-                           nullptr};
+        new (frame_) CoroutineFrame{
+            (void*)((std::uintptr_t)coroutine_statk_base_ + STACK_SIZE),
+            STACK_SIZE,
+            nullptr,
+            nullptr,
+            (void*)lo,
+            (void*)hi,
+            false,
+            nullptr,
+            nullptr,
+            nullptr};
 
-        auto* closure_addr = (uint8_t*)(coroutine_rsp_) - sizeof(ClosureT);
-        closure_addr = align_down(closure_addr, alignof(closure_addr));
+        auto* closure_addr = (uint8_t*)(frame_) - sizeof(ClosureT);
+        closure_addr = align_down(closure_addr, alignof(ClosureT));
 
         new (closure_addr) ClosureT(std::forward<F>(f));
 
@@ -76,10 +77,12 @@ class Coroutine
             static_cast<ClosureT*>(data)->~ClosureT();
         };
 
+        frame_->closure_ptr = closure_addr;
+
         // 트랩 프레임 정렬
         auto* trap_frame_top = align_down(closure_addr, 16);
         frame_->co_rsp = coroutine_rsp_ =
-            make_trap_frame(coroutine_rsp_, &Coroutine::entry);
+            make_trap_frame(trap_frame_top, &Coroutine::entry);
     }
 
     ~Coroutine()
@@ -98,20 +101,26 @@ class Coroutine
 
     bool co_resume()
     {
+        __writegsqword(0x08,
+                       (std::uintptr_t)coroutine_statk_base_ + STACK_SIZE);
+        __writegsqword(0x10, (std::uintptr_t)coroutine_statk_base_);
         coroutine_rsp_ = context_switching(coroutine_rsp_);
 
-        return !((CoroutineFrame*)coroutine_statk_base_)->finished;
+        return !((CoroutineFrame*)(__readgsqword(0x10) -
+                                   sizeof(CoroutineFrame)))
+                    ->finished;
     }
 
   private:
-    static void entry(void* arg)
+    static void entry()
     {
-        auto* frame = static_cast<CoroutineFrame*>(arg);
-        frame->invoke(frame->closure_ptr); // storage → closure_ptr만 바뀜
+        auto* frame =
+            (CoroutineFrame*)(__readgsqword(0x10) - sizeof(CoroutineFrame));
+        frame->invoke(frame->closure_ptr);
         frame->finished = true;
         context_switching(frame->caller_rsp);
 
-        // 이하 UB
+        // 이하 실행시 UB
     }
 
     void* coroutine_statk_base_;
@@ -119,7 +128,7 @@ class Coroutine
     void* coroutine_rsp_;
 };
 
-__forceinline void co_wait()
+void co_wait()
 {
 
     CoroutineFrame* self =
